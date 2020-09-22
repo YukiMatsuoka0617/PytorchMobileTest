@@ -2,11 +2,16 @@ package com.example.pytorchtest;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -21,32 +26,56 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener {
+
+    Button buttonCamera;
+    Button buttonRecognition;
+    ImageView imageView;
+    TextView textView;
+    TextView textView2;
+
+    Bitmap bitmap = null;
+    Module module = null;
+
+    int REQUEST_CAPTURE_IMAGE = 100;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Bitmap bitmap = null;
-        Module module = null;
+        findView();
+        button();
+
         try {
-            // creating bitmap from packaged into app android asset 'image.jpg',
-            // app/src/main/assets/image.jpg
             bitmap = BitmapFactory.decodeStream(getAssets().open("image.jpg"));
-            // loading serialized torchscript module from packaged into app android asset model.pt,
-            // app/src/model/assets/model.pt
             module = Module.load(assetFilePath(this, "resnet.pt"));
-        } catch (IOException e) {
-            Log.e("PytorchHelloWorld", "Error reading assets", e);
-            finish();
-        }
+            } catch (IOException e) {
+                Log.e("PytorchHelloWorld", "Error reading assets", e);
+                finish();
+            }
         // showing image on UI
-        ImageView imageView = findViewById(R.id.imageView);
         imageView.setImageBitmap(bitmap);
 
+        recognition(bitmap);
+    }
+
+    void findView(){
+        buttonCamera = findViewById(R.id.buttonCamera);
+        buttonRecognition = findViewById(R.id.buttonRecognition);
+        imageView = findViewById(R.id.imageView);
+        textView = findViewById(R.id.result1Class);
+        textView2 = findViewById(R.id.result1Score);
+    }
+
+    void button(){
+        buttonCamera.setOnClickListener(this);
+        buttonRecognition.setOnClickListener(this);
+    }
+
+    void recognition(Bitmap image){
         // preparing input tensor
-        final Tensor inputTensor = TensorImageUtils.bitmapToFloat32Tensor(bitmap,
+        final Tensor inputTensor = TensorImageUtils.bitmapToFloat32Tensor(image,
                 TensorImageUtils.TORCHVISION_NORM_MEAN_RGB, TensorImageUtils.TORCHVISION_NORM_STD_RGB);
 
         // running the model
@@ -68,12 +97,22 @@ public class MainActivity extends AppCompatActivity {
         String className = ImageNetClasses.IMAGENET_CLASSES[maxScoreIdx];
 
         // showing className on UI
-        TextView textView = findViewById(R.id.result1Class);
         textView.setText("Class:" + className);
-
-        TextView textView2 = findViewById(R.id.result1Score);
         textView2.setText("Score:" + String.valueOf(maxScore));
+
     }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (REQUEST_CAPTURE_IMAGE == requestCode && resultCode == Activity.RESULT_OK) {
+            Bitmap capturedImage = (Bitmap) data.getExtras().get("data");
+            imageView.setImageBitmap(capturedImage);
+            recognition(capturedImage);
+        }
+    }
+
+
 
     public static String assetFilePath(Context context, String assetName) throws IOException {
         File file = new File(context.getFilesDir(), assetName);
@@ -91,6 +130,20 @@ public class MainActivity extends AppCompatActivity {
                 os.flush();
             }
             return file.getAbsolutePath();
+        }
+    }
+
+    @Override
+    public void onClick(View view) {
+        switch (view.getId()) {
+            case R.id.buttonCamera:
+                Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                startActivityForResult(intent, REQUEST_CAPTURE_IMAGE);
+                break;
+
+            case R.id.buttonRecognition:
+                recognition(bitmap);
+                break;
         }
     }
 
